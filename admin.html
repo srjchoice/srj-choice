@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#440B04"/>
+  <meta name="description" content="SRJ Choice marketplace for products, food and grocery. Instagram @srjchoice. Email thesrjchoice@gmail.com."/>
+  <link rel="icon" href="/logo.jpg"/>
+  <link rel="canonical" href="https://www.srjchoice.shop/"/>
+
+  <title>Admin | SRJ Choice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div id="app"></div>
+<script src="/app.js"></script>
+<script>
+document.getElementById("app").innerHTML = headerHTML("") + `<div id="root"></div>` + footerHTML();
+
+async function start() {
+  const u = currentUser();
+  if (!token() || !u || u.role !== "admin") {
+    document.getElementById("root").innerHTML = `<section class="section"><div class="container auth-card">
+      <h2>Admin login</h2>
+      <form id="lf">
+        <div class="form-group"><label>Email</label><input name="email" /></div>
+        <div class="form-group"><label>Password</label><input type="password" name="password"/></div>
+        <button class="btn btn-primary btn-full">Login</button>
+      </form></div></section>`;
+    document.getElementById("lf").onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const r = await api("/api/auth/login", {method:"POST", body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+        if (r.user.role !== "admin") { toast("Not an admin account"); return; }
+        setToken(r.token); setUser(r.user); location.reload();
+      } catch(err){ toast(err.message); }
+    };
+    return;
+  }
+  document.getElementById("root").innerHTML = `<div class="dash-wrap">
+    <aside class="dash-side">
+      <button class="linky active" data-p="stats">${icon("dash")} Dashboard</button>
+      <button class="linky" data-p="sellers">${icon("seller")} Sellers</button>
+      <button class="linky" data-p="customers">${icon("customers")} Customers</button>
+      <button class="linky" data-p="products">${icon("products")} Products</button>
+      <button class="linky" data-p="cats">${icon("categories")} Categories</button>
+      <button class="linky" data-p="orders">${icon("orders")} Orders</button>
+      <button class="linky" data-p="delivery">${icon("delivery")} Delivery</button>
+      <button class="linky" data-p="payouts">${icon("payouts")} Payouts</button>
+      <button class="linky" data-p="inquiries">${icon("mail")} Inquiries</button>
+      <button class="linky" data-p="settings">${icon("commission")} Commission</button>
+    </aside><div class="dash-main" id="panel"></div></div>`;
+  document.querySelectorAll(".linky").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".linky").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); show(b.dataset.p);
+  });
+  async function show(p) {
+    if (p==="stats") {
+      const s = await api("/api/admin/stats");
+      document.getElementById("panel").innerHTML = `<h2>Marketplace</h2>
+        <div class="stat-grid">
+          ${Object.entries(s).map(([k,v])=>`<div class="stat-card">${k}<b>${typeof v==="number" && k.includes("commission")||k==="gmv"?money(v):v}</b></div>`).join("")}
+        </div>`;
+    }
+    if (p==="sellers") {
+      const list = (await api("/api/admin/sellers")).sellers;
+      document.getElementById("panel").innerHTML = `<h2>Sellers</h2><table class="table">
+        <thead><tr><th>Store</th><th>Owner</th><th>Status</th><th></th></tr></thead>
+        <tbody>${list.map(s=>`<tr><td>${escapeHtml(s.store_name)}</td><td>${escapeHtml(s.name)}<br>${escapeHtml(s.email)}</td>
+          <td>${s.status}</td><td>
+            <button data-s="${s.id}" data-v="approved">Approve</button>
+            <button data-s="${s.id}" data-v="rejected">Reject</button>
+            <button data-s="${s.id}" data-v="suspended">Suspend</button>
+          </td></tr>`).join("")}</tbody></table>`;
+      document.querySelectorAll("[data-s]").forEach(b => b.onclick = async () => {
+        await api("/api/admin/sellers/"+b.dataset.s, {method:"PUT", body:JSON.stringify({status:b.dataset.v})});
+        show("sellers");
+      });
+    }
+    if (p==="products") {
+      const list = (await api("/api/seller/products")).products;
+      document.getElementById("panel").innerHTML = `<h2>Products</h2><table class="table">
+        <thead><tr><th>Name</th><th>Price</th><th>Status</th><th></th></tr></thead>
+        <tbody>${list.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${money(x.price)}</td><td>${x.status}${x.featured?" ★":""}</td>
+          <td>
+            <button data-p="${x.id}" data-v="published">Approve</button>
+            <button data-p="${x.id}" data-v="rejected">Reject</button>
+            <button data-f="${x.id}">Feature</button>
+          </td></tr>`).join("")}</tbody></table>`;
+      document.querySelectorAll("[data-p]").forEach(b => b.onclick = async () => {
+        await api("/api/admin/products/"+b.dataset.p, {method:"PUT", body:JSON.stringify({status:b.dataset.v})});
+        show("products");
+      });
+      document.querySelectorAll("[data-f]").forEach(b => b.onclick = async () => {
+        await api("/api/admin/products/"+b.dataset.f, {method:"PUT", body:JSON.stringify({featured:true})});
+        toast("Featured");
+      });
+    }
+    if (p==="orders") {
+      const list = (await api("/api/admin/orders")).orders;
+      document.getElementById("panel").innerHTML = `<h2>Orders</h2><table class="table">
+        <thead><tr><th>ID</th><th>Total</th><th>Pay</th><th>Status</th></tr></thead>
+        <tbody>${list.map(o=>`<tr><td>${o.public_id}</td><td>${money(o.total)}</td><td>${o.payment_method}</td>
+          <td><select data-o="${o.id}">${["placed","processing","shipped","delivered","cancelled"].map(s=>`<option ${s===o.status?"selected":""}>${s}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+      document.querySelectorAll("[data-o]").forEach(sel => sel.onchange = async () => {
+        await api("/api/admin/orders/"+sel.dataset.o, {method:"PUT", body:JSON.stringify({status:sel.value})});
+      });
+    }
+    if (p==="cats") {
+      const cats = (await api("/api/categories/all")).categories;
+      const mains = cats.filter(c=>!c.parent_id);
+      document.getElementById("panel").innerHTML = `<h2>Categories</h2>
+        <form id="cf" class="shop-filters">
+          <input name="name" placeholder="Name" required/>
+          <select name="parent_id"><option value="">Main category</option>${mains.map(m=>`<option value="${m.id}">Under ${escapeHtml(m.name)}</option>`).join("")}</select>
+          <input name="commission_pct" placeholder="Commission % (optional)" type="number" step="0.1"/>
+          <button class="btn btn-primary btn-sm">Add</button>
+        </form>
+        <table class="table"><thead><tr><th>Name</th><th>Parent</th><th>Active</th><th>Commission</th><th></th></tr></thead>
+        <tbody>${cats.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${c.parent_id||"—"}</td><td>${c.active?"yes":"no"}</td>
+          <td>${c.commission_pct??"—"}</td>
+          <td><button data-off="${c.id}">Deactivate</button></td></tr>`).join("")}</tbody></table>`;
+      document.getElementById("cf").onsubmit = async e => {
+        e.preventDefault();
+        const d = Object.fromEntries(new FormData(e.target));
+        d.parent_id = d.parent_id ? Number(d.parent_id) : null;
+        d.commission_pct = d.commission_pct === "" ? null : Number(d.commission_pct);
+        await api("/api/admin/categories", {method:"POST", body:JSON.stringify(d)});
+        show("cats");
+      };
+      document.querySelectorAll("[data-off]").forEach(b => b.onclick = async () => {
+        await api("/api/admin/categories/"+b.dataset.off, {method:"PUT", body:JSON.stringify({delete:true})});
+        show("cats");
+      });
+    }
+    if (p==="customers") {
+      const list = (await api("/api/admin/customers")).customers;
+      document.getElementById("panel").innerHTML = `<h2>Customers</h2><table class="table">
+        <thead><tr><th>Name</th><th>Email</th><th>Phone</th></tr></thead>
+        <tbody>${list.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.email||"")}</td><td>${escapeHtml(c.phone||"")}</td></tr>`).join("")}</tbody></table>`;
+    }
+    if (p==="payouts") {
+      const sellers = (await api("/api/admin/sellers")).sellers;
+      const pays = (await api("/api/admin/payouts")).payouts;
+      document.getElementById("panel").innerHTML = `<h2>Payouts</h2>
+        <form id="po" class="shop-filters">
+          <select name="seller_id">${sellers.map(s=>`<option value="${s.id}">${escapeHtml(s.store_name)}</option>`).join("")}</select>
+          <input name="amount" type="number" step="0.01" placeholder="Amount"/>
+          <button class="btn btn-primary btn-sm">Record payout</button>
+        </form>
+        <table class="table"><thead><tr><th>ID</th><th>Seller</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${pays.map(p=>`<tr><td>${p.id}</td><td>${escapeHtml(p.store_name || "Store")}</td><td>${money(p.amount)}</td><td>${p.status}</td></tr>`).join("")}</tbody></table>`;
+      document.getElementById("po").onsubmit = async e => {
+        e.preventDefault();
+        const d = Object.fromEntries(new FormData(e.target));
+        d.seller_id = Number(d.seller_id); d.amount = Number(d.amount);
+        try { await api("/api/admin/payouts", {method:"POST", body:JSON.stringify(d)}); show("payouts"); }
+        catch(err){ toast(err.message); }
+      };
+    }
+    if (p==="delivery") {
+      const data = await api("/api/delivery/orders");
+      const partners = await api("/api/delivery/partners");
+      document.getElementById("panel").innerHTML = `<h2>Delivery management</h2>
+        <p>Partners: ${(partners.partners||[]).map(x=>escapeHtml(x.name)+" ("+x.kind+")").join(" · ")}</p>
+        <table class="table"><thead><tr><th>Order</th><th>Type</th><th>Fee</th><th>ETA</th><th>Track</th><th>Delivery status</th></tr></thead>
+        <tbody>${(data.orders||[]).map(o=>`<tr>
+          <td>${o.public_id}</td><td>${o.vertical||"product"}</td>
+          <td>${money(o.delivery_fee||o.shipping||0)}</td>
+          <td>${o.eta_minutes?o.eta_minutes+" min":(o.eta_date||"—")}</td>
+          <td>${(o.delivery&&o.delivery.tracking_code)||"—"}</td>
+          <td>${(o.delivery&&o.delivery.status)||"—"}</td>
+        </tr>`).join("")}</tbody></table>`;
+    }
+    if (p==="inquiries") {
+      const qv = document.getElementById("inq-q")?.value || "";
+      const typ = document.getElementById("inq-type")?.value || "";
+      const stv = document.getElementById("inq-st")?.value || "";
+      const qs = new URLSearchParams();
+      if (qv) qs.set("q", qv);
+      if (typ) qs.set("type", typ);
+      if (stv) qs.set("status", stv);
+      const list = (await api("/api/admin/inquiries?" + qs.toString())).inquiries || [];
+      document.getElementById("panel").innerHTML = `<h2>Inquiries</h2>
+        <div class="shop-filters">
+          <input id="inq-q" placeholder="Search name, email, order" value="${escapeHtml(qv)}"/>
+          <select id="inq-type"><option value="">All types</option>
+            ${[["general","General"],["seller","Seller"],["food_partner","Food"],["grocery_partner","Grocery"],["delivery_partner","Delivery"],["partnership","Partnership"],["order_support","Order"],["payment_support","Payment"],["refund","Refund"],["technical","Technical"],["other","Other"]].map(([v,l])=>`<option value="${v}" ${typ===v?"selected":""}>${l}</option>`).join("")}
+          </select>
+          <select id="inq-st"><option value="">All status</option>
+            ${["new","open","in_progress","resolved","closed"].map(s=>`<option ${stv===s?"selected":""}>${s}</option>`).join("")}
+          </select>
+          <button class="btn btn-sm btn-primary" id="inq-go">Filter</button>
+        </div>
+        <table class="table"><thead><tr><th>When</th><th>Type</th><th>From</th><th>Subject</th><th>Status</th><th></th></tr></thead>
+        <tbody>${list.map(i=>`<tr>
+          <td>${new Date((i.created_at||0)*1000).toLocaleDateString()}</td>
+          <td>${escapeHtml(i.inquiry_type)}</td>
+          <td>${escapeHtml(i.name)}<br>${escapeHtml(i.email||"")} ${escapeHtml(i.phone||"")}</td>
+          <td>${escapeHtml(i.subject||"")}<div class="seller-chip">${escapeHtml((i.message||"").slice(0,80))}</div></td>
+          <td>
+            <select data-is="${i.id}">${["new","open","in_progress","resolved","closed"].map(s=>`<option ${s===i.status?"selected":""}>${s}</option>`).join("")}</select>
+          </td>
+          <td><button data-note="${i.id}">Note</button> <button data-del="${i.id}">Archive</button></td>
+        </tr>`).join("") || "<tr><td colspan=6>No inquiries</td></tr>"}</tbody></table>`;
+      document.getElementById("inq-go").onclick = () => show("inquiries");
+      document.querySelectorAll("[data-is]").forEach(sel => sel.onchange = async () => {
+        await api("/api/admin/inquiries/"+sel.dataset.is, {method:"PUT", body:JSON.stringify({status: sel.value})});
+        toast("Updated");
+      });
+      document.querySelectorAll("[data-note]").forEach(b => b.onclick = async () => {
+        const note = prompt("Internal note");
+        if (note == null) return;
+        await api("/api/admin/inquiries/"+b.dataset.note, {method:"PUT", body:JSON.stringify({admin_note: note})});
+        toast("Saved");
+      });
+      document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+        if (!confirm("Archive this inquiry?")) return;
+        await api("/api/admin/inquiries/"+b.dataset.del, {method:"PUT", body:JSON.stringify({archive:true})});
+        show("inquiries");
+      });
+    }
+    if (p==="settings") {
+      const s = await api("/api/admin/stats");
+      document.getElementById("panel").innerHTML = `<h2>Commission</h2>
+        <form id="cm" class="auth-card" style="margin:0">
+          <div class="form-group"><label>Default marketplace commission %</label>
+            <input name="commission_default" type="number" step="0.1" value="${s.commission_default}"/></div>
+          <h3 style="margin-top:1.25rem">Public contact details</h3>
+          <p class="payment-note">Leave blank until official. Empty fields stay hidden on the website.</p>
+          <div class="form-group"><label>Business email</label><input name="contact_business_email"/></div>
+          <div class="form-group"><label>Customer support email</label><input name="contact_support_email"/></div>
+          <div class="form-group"><label>Seller support email</label><input name="contact_seller_email"/></div>
+          <div class="form-group"><label>Office address</label><input name="contact_address"/></div>
+          <div class="form-group"><label>Support hours</label><input name="contact_hours" placeholder="e.g. Mon–Sat 10:00–18:00"/></div>
+          <button class="btn btn-primary">Save</button>
+        </form>
+        <p class="payment-note">Instagram @srjchoice and www.srjchoice.shop are fixed official links. Commission is calculated on the server.</p>`;
+      document.getElementById("cm").onsubmit = async e => {
+        e.preventDefault();
+        const d = Object.fromEntries(new FormData(e.target));
+        if (d.commission_default) d.commission_default = Number(d.commission_default);
+        await api("/api/admin/settings", {method:"PUT", body:JSON.stringify(d)});
+        toast("Saved");
+      };
+    }
+  }
+  show("stats");
+}
+start();
+</script>
+</body></html>
