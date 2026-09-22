@@ -70,8 +70,8 @@ async function renderHome() {
       <div class="why-card"><div class="cat-icon-wrap">${icon("earnings")}</div><h3>Fair marketplace</h3><p>Transparent platform commission. Sellers keep their earnings.</p></div>
     </div></section>`;
   document.getElementById("home-cats").innerHTML = mains.slice(0,8).map(c => `
-    <a class="category-card" href="/?page=shop&category=${c.id}" style="aspect-ratio:4/3;background:linear-gradient(135deg,#440B04,#5a1408);display:flex;align-items:flex-end">
-      <div class="category-overlay"><div class="cat-icon-wrap">${icon(categoryIconName(c.name))}</div><div><h3>${escapeHtml(c.name)}</h3></div></div>
+    <a class="category-card" href="/?page=shop&category=${c.id}" style="background:linear-gradient(160deg,#440B04,#6b1a0c)">
+      <div class="category-overlay"><div class="cat-icon-wrap">${icon(categoryIconName(c.name))}</div><h3>${escapeHtml(c.name)}</h3></div>
     </a>`).join("");
 }
 
