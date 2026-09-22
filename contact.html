@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#440B04"/>
+  <meta name="description" content="SRJ Choice marketplace for products, food and grocery. Instagram @srjchoice. Email thesrjchoice@gmail.com."/>
+  <link rel="icon" href="/logo.jpg"/>
+  <link rel="canonical" href="https://www.srjchoice.shop/"/>
+
+  <title>Contact Us | SRJ Choice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div id="app"></div>
+<script src="/app.js"></script>
+<script>
+document.getElementById("app").innerHTML = headerHTML("contact") + `<main id="main"></main>` + footerHTML();
+updateCartCount();
+
+const TYPES = [
+  ["general","General Inquiry"],
+  ["seller","Seller Inquiry"],
+  ["food_partner","Food Partner"],
+  ["grocery_partner","Grocery Partner"],
+  ["delivery_partner","Delivery Partner"],
+  ["partnership","Business Partnership"],
+  ["order_support","Order Support"],
+  ["payment_support","Payment Support"],
+  ["refund","Refund/Return"],
+  ["technical","Technical Support"],
+  ["other","Other"]
+];
+
+(async function () {
+  let contact = {};
+  try { contact = (await api("/api/contact")).contact || {}; } catch {}
+  const extra = [];
+  if (contact.business_email || contact.contact_business_email) extra.push(["Business Email", contact.business_email || contact.contact_business_email]);
+  if (contact.support_email || contact.contact_support_email) extra.push(["Customer Support Email", contact.support_email || contact.contact_support_email]);
+  if (contact.seller_email || contact.contact_seller_email) extra.push(["Seller Support Email", contact.seller_email || contact.contact_seller_email]);
+  if (contact.address || contact.contact_address) extra.push(["Office Address", contact.address || contact.contact_address]);
+  if (contact.hours || contact.contact_hours) extra.push(["Support Hours", contact.hours || contact.contact_hours]);
+
+  document.getElementById("main").innerHTML = `
+    <section class="page-hero"><div class="container">
+      <h1>Contact Us</h1>
+      <p>Customers, sellers, restaurants, grocery stores and delivery partners can reach SRJ Choice here.</p>
+    </div></section>
+    <section class="section"><div class="container contact-layout">
+      <div>
+        <h2 class="section-title">Send an inquiry</h2>
+        <h3>Instagram</h3>
+            <p>@srjchoice</p>
+          </a>
+          <a class="why-card contact-link-card" href="https://www.srjchoice.shop/" target="_blank" rel="noopener">
+            <div class="cat-icon-wrap">${icon("globe")}</div>
+            <h3>Website</h3>
+            <p>www.srjchoice.shop</p>
+          </a>
+          <a class="why-card contact-link-card" href="mailto:thesrjchoice@gmail.com">
+            <div class="cat-icon-wrap">${icon("mail")}</div>
+            <h3>Email</h3>
+            <p>thesrjchoice@gmail.com</p>
+          </a>
+        </div>
+        ${extra.length ? `<div class="why-card" style="margin-top:1rem;text-align:left">${extra.map(([l,v])=>`<p><strong>${escapeHtml(l)}</strong><br>${escapeHtml(v)}</p>`).join("")}</div>` : ""}
+        <div class="why-grid" style="margin-top:1.5rem">
+          <div class="why-card"><div class="cat-icon-wrap">${icon("seller")}</div><h3>Become a Seller</h3><p>List products on SRJ Choice.</p></div>
+          <div class="why-card"><div class="cat-icon-wrap">${icon("food")}</div><h3>Food Partner</h3><p>Restaurants and kitchens.</p></div>
+          <div class="why-card"><div class="cat-icon-wrap">${icon("grocery")}</div><h3>Grocery Partner</h3><p>Stores and daily essentials.</p></div>
+          <div class="why-card"><div class="cat-icon-wrap">${icon("delivery")}</div><h3>Delivery Partner</h3><p>Courier and rider networks.</p></div>
+        </div>
+      </div>
+      <form class="contact-form" id="inq">
+        <h3>Business Inquiry</h3>
+        <div class="form-group"><label>Full name</label><input name="name" required minlength="2"/></div>
+        <div class="form-row">
+          <div class="form-group"><label>Mobile</label><input name="phone" inputmode="numeric"/></div>
+          <div class="form-group"><label>Email</label><input name="email" type="email"/></div>
+        </div>
+        <div class="form-group"><label>Inquiry type</label>
+          <select name="inquiry_type">${TYPES.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
+        </div>
+        <div class="form-group"><label>Subject</label><input name="subject" required/></div>
+        <div class="form-group"><label>Order number (optional)</label><input name="order_number"/></div>
+        <div class="form-group"><label>Message</label><textarea name="message" rows="5" required minlength="10"></textarea></div>
+        <p class="payment-note">Inquiries are private. Do not send card numbers or passwords.</p>
+        <button class="btn btn-primary btn-full">Submit inquiry</button>
+      </form>
+    </div></section>`;
+
+  document.getElementById("inq").onsubmit = async e => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(e.target));
+    if (!d.phone && !d.email) { toast("Add mobile or email"); return; }
+    try {
+      await api("/api/inquiries", { method: "POST", body: JSON.stringify(d) });
+      document.getElementById("inq").outerHTML = `<div class="why-card"><div class="cat-icon-wrap">${icon("st_delivered")}</div><h3>Inquiry submitted</h3><p>Thank you. SRJ Choice has received your message. Our team will review it privately.</p></div>`;
+    } catch (err) { toast(err.message); }
+  };
+})();
+</script>
+</body>
+</html>
