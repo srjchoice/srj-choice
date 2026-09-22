@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#440B04"/>
+  <meta name="description" content="SRJ Choice marketplace for products, food and grocery. Instagram @srjchoice. Email thesrjchoice@gmail.com."/>
+  <link rel="icon" href="/logo.jpg"/>
+  <link rel="canonical" href="https://www.srjchoice.shop/"/>
+
+  <title>Policies | SRJ Choice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div id="app"></div>
+<script src="/app.js"></script>
+<script>
+document.getElementById("app").innerHTML = headerHTML("") + `
+<section class="page-hero"><div class="container"><h1>Policies</h1><p>SRJ Choice marketplace terms</p></div></section>
+<section class="section"><div class="container about-content about-text">
+  <h2 id="about">About Us</h2>
+  <p>SRJ Choice is a marketplace for products, food and grocery. Independent sellers list items. Restaurants and grocery partners fulfil food orders. SRJ Choice operates the platform and earns a commission on sales.</p>
+  <h2>Terms &amp; Conditions</h2>
+  <p>By using SRJ Choice you agree to shop through independent sellers and food partners on this platform. Product availability, preparation times and dispatch times are set by each seller.</p>
+  <h2>Seller Agreement</h2>
+  <p>Sellers must provide accurate store, tax and payout details. Products and menus require platform approval before they appear publicly. Sellers may only access their own catalogue, orders and earnings. Commission is calculated on the server from the selling price.</p>
+  <h2>Privacy Policy</h2>
+  <p>We collect account details needed to operate the marketplace: name, email, mobile and delivery address. Passwords are hashed. Card numbers and CVV are not stored. Bank account numbers are not stored in full. You may request account deletion from your account page.</p>
+  <h2 id="shipping">Shipping &amp; Delivery Policy</h2>
+  <p>Physical products follow a shipping workflow with seller processing and courier partners. Food and grocery orders follow a restaurant workflow with preparation time and local delivery. Delivery fees are calculated separately from marketplace commission.</p>
+  <h2>Return &amp; Refund Policy</h2>
+  <p>Returns are handled between the customer, the selling store and SRJ Choice support. Approved refunds adjust seller earnings before payout.</p>
+  <h2>Payments</h2>
+  <p>SRJ Choice does not store card numbers or CVV. Customers may pay by UPI, net banking, wallet or cash on delivery. Official payments are processed through licensed partners.</p>
+</div></section>` + footerHTML();
+updateCartCount();
+</script>
+</body></html>
