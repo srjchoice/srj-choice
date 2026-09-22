@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#440B04"/>
+  <meta name="description" content="SRJ Choice is a marketplace for products, food and grocery. Shop independent sellers. Instagram @srjchoice."/>
+  <meta property="og:title" content="SRJ Choice"/>
+  <meta property="og:description" content="Your marketplace for products, food and grocery."/>
+  <meta property="og:url" content="https://www.srjchoice.shop/"/>
+  <meta property="og:image" content="/logo.jpg"/>
+  <link rel="canonical" href="https://www.srjchoice.shop/"/>
+  <link rel="icon" href="/logo.jpg"/>
+  <title>SRJ Choice | Products, Food and Grocery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/app.js"></script>
+  <script>
+const params = new URLSearchParams(location.search);
+let cats = [];
+
+async function boot() {
+  const page = params.get("page") || (params.get("product") ? "product" : "home");
+  document.getElementById("app").innerHTML = headerHTML(page) + `<main id="main"></main>` + footerHTML();
+  updateCartCount();
+  cats = (await api("/api/categories")).categories;
+  if (page === "shop") return renderShop();
+  if (page === "food") return renderFood();
+  if (page === "categories") return renderCats();
+  if (page === "cart") return renderCart();
+  if (page === "checkout") return renderCheckout();
+  if (params.get("product")) return renderProduct(params.get("product"));
+  if (params.get("seller")) return renderSeller(params.get("seller"));
+  return renderHome();
+}
+
+async function renderHome() {
+  const [prodRes] = await Promise.all([api("/api/products?vertical=product")]);
+  const products = prodRes.products || [];
+  const mains = cats.filter(c => !c.parent_id && (c.vertical || "product") === "product");
+  document.getElementById("main").innerHTML = `
+    <section class="hero"><div class="hero-bg"></div>
+      <div class="container hero-content">
+        <p class="hero-eyebrow fade-up">Premium marketplace</p>
+        <h1 class="hero-title fade-up">Discover independent sellers. Shop SRJ Choice.</h1>
+        <p class="hero-desc fade-up">Quality products from verified sellers. Food and grocery from local partners. Secure checkout.</p>
+        <div class="hero-cta fade-up">
+          <a class="btn btn-accent" href="/?page=shop">Shop products</a>
+          <a class="btn btn-outline" href="/?page=food">Order food</a>
+        </div>
+      </div>
+    </section>
+    <section class="section"><div class="container">
+      <div class="section-header"><h2 class="section-title">Categories</h2><p class="section-subtitle">Browse the marketplace</p></div>
+      <div class="category-grid" id="home-cats"></div>
+      <div class="section-cta"><a class="btn btn-outline-dark" href="/?page=categories">All Categories</a></div>
+    </div></section>
+    <section class="section section-alt"><div class="container">
+      <div class="section-header"><h2 class="section-title">Featured products</h2></div>
+      <div class="product-grid">${products.slice(0,8).map(productCard).join("")}</div>
+    </div></section>
+    <section class="section"><div class="container why-grid">
+      <div class="why-card"><div class="cat-icon-wrap">${icon("seller")}</div><h3>Independent sellers</h3><p>Shop stores across fashion, home, electronics and more.</p></div>
+      <div class="why-card"><div class="cat-icon-wrap">${icon("commission")}</div><h3>Secure checkout</h3><p>Card data is never stored on SRJ Choice servers.</p></div>
+      <div class="why-card"><div class="cat-icon-wrap">${icon("delivery")}</div><h3>Tracked orders</h3><p>Follow every order from seller fulfillment to delivery.</p></div>
+      <div class="why-card"><div class="cat-icon-wrap">${icon("earnings")}</div><h3>Fair marketplace</h3><p>Transparent platform commission. Sellers keep their earnings.</p></div>
+    </div></section>`;
+  document.getElementById("home-cats").innerHTML = mains.slice(0,8).map(c => `
+    <a class="category-card" href="/?page=shop&category=${c.id}" style="aspect-ratio:4/3;background:linear-gradient(135deg,#440B04,#5a1408);display:flex;align-items:flex-end">
+      <div class="category-overlay"><div class="cat-icon-wrap">${icon(categoryIconName(c.name))}</div><div><h3>${escapeHtml(c.name)}</h3></div></div>
+    </a>`).join("");
+}
+
+async function renderCats() {
+  const mains = cats.filter(c => !c.parent_id);
+  document.getElementById("main").innerHTML = `<section class="page-hero"><div class="container"><h1>All Categories</h1><p>Shop by department</p></div></section>
+    <section class="section"><div class="container cat-mega">${mains.map(m => {
+      const subs = cats.filter(c => c.parent_id === m.id);
+      const href = (m.vertical === "food" || m.vertical === "grocery") ? "/?page=food" : ("/?page=shop&category=" + m.id);
+      return `<div class="why-card"><div class="cat-icon-wrap">${icon(categoryIconName(m.name))}</div><h3><a href="${href}">${escapeHtml(m.name)}</a></h3>
+        ${subs.map(s => `<div><a href="${(m.vertical==="food"||m.vertical==="grocery")?"/?page=food&category="+s.id:("/?page=shop&category="+s.id)}">${escapeHtml(s.name)}</a></div>`).join("")}</div>`;
+    }).join("")}</div></section>`;
+}
+
+async function renderShop() {
+  const cat = params.get("category") || "";
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "featured";
+  const qs = new URLSearchParams();
+  qs.set("vertical", "product");
+  if (cat) qs.set("category", cat);
+  if (q) qs.set("q", q);
+  if (sort) qs.set("sort", sort);
+  const products = (await api("/api/products?" + qs.toString())).products;
+  const mains = cats.filter(c => !c.parent_id && (c.vertical || "product") === "product");
+  document.getElementById("main").innerHTML = `<section class="page-hero"><div class="container"><h1>Shop</h1><p>Search products and sellers</p></div></section>
+    <section class="section"><div class="container">
+      <div class="shop-toolbar">
+        <div class="shop-search"><input id="shop-q" placeholder="Search products or sellers" value="${escapeHtml(q)}"/></div>
+        <div class="shop-filters">
+          <select id="shop-cat"><option value="">All Categories</option>${mains.map(c => `<option value="${c.id}" ${String(c.id)===cat?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select>
+          <select id="shop-sort">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="name-asc">Name</option>
+          </select>
+        </div>
+      </div>
+      <div class="product-grid">${products.length ? products.map(productCard).join("") : "<p class='no-results'>No products found.</p>"}</div>
+    </div></section>`;
+  const go = () => {
+    const n = new URLSearchParams();
+    n.set("page", "shop");
+    const qq = document.getElementById("shop-q").value.trim();
+    const cc = document.getElementById("shop-cat").value;
+    const ss = document.getElementById("shop-sort").value;
+    if (qq) n.set("q", qq);
+    if (cc) n.set("category", cc);
+    if (ss) n.set("sort", ss);
+    location.search = n.toString();
+  };
+  document.getElementById("shop-q").addEventListener("change", go);
+  document.getElementById("shop-cat").addEventListener("change", go);
+  document.getElementById("shop-sort").addEventListener("change", go);
+}
+
+async function renderFood() {
+  const [rest, menu] = await Promise.all([
+    api("/api/food/restaurants"),
+    api("/api/products?vertical=food"),
+  ]);
+  const grocery = await api("/api/products?vertical=grocery").catch(() => ({products:[]}));
+  const foods = (menu.products || []).concat(grocery.products || []);
+  document.getElementById("main").innerHTML = `<section class="page-hero"><div class="container">
+      <h1>Food & Grocery</h1><p>Restaurants, kitchens and grocery sellers. Separate from product shipping.</p>
+    </div></section>
+    <section class="section"><div class="container">
+      <h2 class="section-title">Restaurants & stores</h2>
+      <div class="cat-mega">${(rest.restaurants||[]).map(r => `
+        <a class="why-card" href="/?seller=${r.id}">
+          <div class="cat-icon-wrap">${icon("restaurant")}</div>
+          <h3>${escapeHtml(r.store_name)}</h3>
+          <p>${escapeHtml(r.city||"")} · ${escapeHtml(r.open_status||"open")}</p>
+          <p>Prep ~${r.prep_time_min||30} min · ${r.delivery_enabled?"Delivery":""} ${r.pickup_enabled?"Pickup":""}</p>
+        </a>`).join("") || "<p>No food sellers yet.</p>"}</div>
+      <h2 class="section-title" style="margin-top:2rem">Menu items</h2>
+      <div class="product-grid">${foods.length ? foods.map(productCard).join("") : "<p class='no-results'>No dishes listed.</p>"}</div>
+    </div></section>`;
+}
+
+async function renderProduct(id) {
+  const { product: p } = await api("/api/products/" + id);
+  const img = (p.images && p.images[0]) || "";
+  document.getElementById("main").innerHTML = `<section class="section"><div class="container">
+    <a class="back-link" href="/?page=shop">Back to shop</a>
+    <div class="product-detail">
+      <div class="product-detail-image"><img src="${img}" alt="${escapeHtml(p.name)}"/></div>
+      <div class="product-detail-info">
+        <span class="detail-category">${escapeHtml(p.store_name || "")}</span>
+        <h1>${escapeHtml(p.name)}</h1>
+        <div class="detail-price">${money(p.price)}${p.mrp ? ` <span class="old">${money(p.mrp)}</span>` : ""}</div>
+        <p class="detail-desc">${escapeHtml(p.description || "")}</p>
+        <p class="seller-chip">Sold by <a href="/?seller=${p.store_id}">${escapeHtml(p.store_name || "SRJ Choice seller")}</a></p>
+        <div class="detail-actions">
+          <button class="btn btn-primary" type="button" onclick="addToCart(${p.id});">Add to cart</button>
+          <button class="btn btn-accent" onclick="addToCart(${p.id}); location.href='/?page=checkout'">Buy Now</button>
+        </div>
+      </div>
+    </div>
+  </div></section>`;
+}
+
+async function renderSeller(id) {
+  const data = await api("/api/sellers/public/" + id);
+  document.getElementById("main").innerHTML = `<section class="page-hero"><div class="container">
+    <h1>${escapeHtml(data.seller.store_name)}</h1>
+    <p>${escapeHtml(data.seller.city || "")} · ${escapeHtml(data.seller.bio || "Independent seller on SRJ Choice")}</p>
+  </div></section>
+  <section class="section"><div class="container product-grid">${(data.products||[]).map(p => productCard({...p, store_name: data.seller.store_name})).join("")}</div></section>`;
+}
+
+async function renderCart() {
+  const cart = cartGet();
+  if (!cart.length) {
+    document.getElementById("main").innerHTML = `<section class="section"><div class="container cart-empty">
+      <h2>Your cart is empty</h2><a class="btn btn-primary" href="/?page=shop">Continue Shopping</a></div></section>`;
+    return;
+  }
+  const catalog = (await api("/api/products")).products;
+  const lines = cart.map(i => ({ ...i, p: catalog.find(x => x.id === i.product_id) })).filter(x => x.p);
+  const sub = lines.reduce((s, l) => s + l.p.price * l.qty, 0);
+  const ship = sub >= 999 ? 0 : 49;
+  document.getElementById("main").innerHTML = `<section class="section"><div class="container cart-layout">
+    <div class="cart-items">${lines.map(l => `<div class="cart-item">
+      <img src="${(l.p.images&&l.p.images[0])||""}" alt="${escapeHtml(l.p.name)}"/>
+      <div class="cart-item-info"><h4>${escapeHtml(l.p.name)}</h4><div class="price">${money(l.p.price)}</div>
+        <div class="seller-chip">${escapeHtml(l.p.store_name || "")}</div></div>
+      <div class="cart-item-actions">
+        <div class="cart-item-qty">
+          <button onclick="chg(${l.p.id},-1)">−</button><span>${l.qty}</span><button onclick="chg(${l.p.id},1)">+</button>
+        </div>
+        <button class="remove-btn" onclick="rm(${l.p.id})">Remove</button>
+      </div></div>`).join("")}</div>
+    <div class="cart-summary">
+      <h3>Order Summary</h3>
+      <div class="summary-row"><span>Subtotal</span><span>${money(sub)}</span></div>
+      <div class="summary-row"><span>Shipping</span><span>${ship?money(ship):"Free"}</span></div>
+      <div class="summary-row total"><span>Total</span><span>${money(sub+ship)}</span></div>
+      <a class="btn btn-primary btn-full" href="/?page=checkout">Checkout</a>
+    </div></div></section>`;
+}
+window.chg = (id, d) => {
+  const c = cartGet();
+  const e = c.find(x => x.product_id === id);
+  if (!e) return;
+  e.qty += d;
+  cartSet(e.qty <= 0 ? c.filter(x => x.product_id !== id) : c);
+  renderCart();
+};
+window.rm = (id) => { cartSet(cartGet().filter(x => x.product_id !== id)); renderCart(); };
+
+async function renderCheckout() {
+  const u = currentUser();
+  if (!u) {
+    document.getElementById("main").innerHTML = `<section class="section"><div class="container auth-card">
+      <h2>Login to checkout</h2><p>Create an account or log in to place your order.</p>
+      <a class="btn btn-primary btn-full" href="/account?next=checkout">Go to Account</a></div></section>`;
+    return;
+  }
+  const cart = cartGet();
+  if (!cart.length) { location.href = "/?page=cart"; return; }
+  document.getElementById("main").innerHTML = `<section class="page-hero"><div class="container"><h1>Checkout</h1></div></section>
+    <section class="section"><div class="container checkout-layout">
+      <form id="co-form" class="checkout-form-col">
+        <h3>Shipping</h3>
+        <div class="form-group"><label>Full name</label><input required name="name" value="${escapeHtml(u.name||"")}"/></div>
+        <div class="form-group"><label>Address</label><input required name="line1"/></div>
+        <div class="form-row">
+          <div class="form-group"><label>City</label><input required name="city"/></div>
+          <div class="form-group"><label>Pincode</label><input required name="pincode"/></div>
+        </div>
+        <div class="form-group"><label>Phone</label><input required name="phone" value="${escapeHtml(u.phone||"")}"/></div>
+        <h3 class="mt-lg">Payment</h3>
+        <p class="payment-note">SRJ Choice does not store card numbers or CVV. Pay via UPI / net banking / wallet or cash on delivery.</p>
+        <label class="payment-option"><input type="radio" name="pay" value="upi" checked/><div class="payment-card"><span class="payment-label">UPI</span></div></label>
+        <label class="payment-option"><input type="radio" name="pay" value="netbanking"/><div class="payment-card"><span class="payment-label">Net banking</span></div></label>
+        <label class="payment-option"><input type="radio" name="pay" value="wallet"/><div class="payment-card"><span class="payment-label">Wallet</span></div></label>
+        <label class="payment-option"><input type="radio" name="pay" value="cod"/><div class="payment-card"><span class="payment-label">Cash on delivery</span></div></label>
+        <button class="btn btn-primary btn-full" style="margin-top:1rem">Place order</button>
+      </form>
+      <div class="order-summary" id="sum"></div>
+    </div></section>`;
+  const catalog = (await api("/api/products")).products;
+  const lines = cart.map(i => ({...i, p: catalog.find(x => x.id===i.product_id)})).filter(x=>x.p);
+  const sub = lines.reduce((s,l)=>s+l.p.price*l.qty,0);
+  const ship = sub>=999?0:49;
+  document.getElementById("sum").innerHTML = `<h3>Order Summary</h3>${lines.map(l=>`<div class="order-item"><span>${escapeHtml(l.p.name)} × ${l.qty}</span><span>${money(l.p.price*l.qty)}</span></div>`).join("")}
+    <div class="summary-row total"><span>Total</span><span>${money(sub+ship)}</span></div>`;
+  document.getElementById("co-form").onsubmit = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const r = await api("/api/orders", { method:"POST", body: JSON.stringify({
+        items: cart,
+        payment_method: fd.get("pay"),
+        address: { name: fd.get("name"), line1: fd.get("line1"), city: fd.get("city"), pincode: fd.get("pincode"), phone: fd.get("phone") }
+      })});
+      cartSet([]);
+      document.getElementById("main").innerHTML = `<section class="success-section"><div class="success-content">
+        <div class="success-icon" aria-hidden="true">${icon("st_delivered")}</div><h1>Order placed</h1>
+        <p class="order-id">${r.order_id}</p>
+        <p>Pay via ${r.payment_method}. Total ${money(r.total)}.</p>
+        <a class="btn btn-primary" href="/account">View orders</a></div></section>`;
+    } catch (err) { toast(err.message); }
+  };
+}
+
+boot().catch(err => { document.getElementById("app").innerHTML = headerHTML("home") + `<p class="container section">${escapeHtml(err.message)}</p>` + footerHTML(); });
+  </script>
+</body>
+</html>
