@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Seller Center | SRJ Choice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div id="app"></div>
+<script src="/app.js"></script>
+<script>
+document.getElementById("app").innerHTML = headerHTML("") + `<div id="root"></div>` + footerHTML();
+
+async function start() {
+  const u = currentUser();
+  if (!token() || !u || u.role !== "seller") return apply();
+  try {
+    const me = await api("/api/me");
+    if (!me.seller) return apply();
+    return dashboard(me);
+  } catch { return apply(); }
+}
+
+function apply() {
+  document.getElementById("root").innerHTML = `<section class="page-hero"><div class="container"><h1>Become a Seller</h1><p>List products on SRJ Choice and reach customers nationwide.</p></div></section>
+    <section class="section"><div class="container auth-card" style="max-width:560px">
+      <form id="sf">
+        <div class="form-group"><label>Full name</label><input name="name" required/></div>
+        <div class="form-group"><label>Email</label><input type="email" name="email" required/></div>
+        <div class="form-group"><label>Mobile</label><input name="phone" required/></div>
+        <div class="form-group"><label>Password</label><input type="password" name="password" minlength="8" required/></div>
+        <div class="form-group"><label>Seller type</label>
+          <select name="vertical"><option value="product">Physical products</option><option value="food">Restaurant / Food</option><option value="grocery">Grocery</option></select>
+        </div>
+        <div class="form-group"><label>Store name</label><input name="store_name" required/></div>
+        <div class="form-group"><label>Address</label><input name="address" required/></div>
+        <div class="form-row">
+          <div class="form-group"><label>City</label><input name="city" required/></div>
+          <div class="form-group"><label>Pincode</label><input name="pincode" required/></div>
+        </div>
+        <div class="form-group"><label>GSTIN (if applicable)</label><input name="gstin"/></div>
+        <div class="form-group"><label>PAN</label><input name="pan"/></div>
+        <div class="form-group"><label>Bank name</label><input name="bank_name"/></div>
+        <div class="form-group"><label>IFSC</label><input name="ifsc"/></div>
+        <div class="form-group"><label>Account number</label><input name="account_number" autocomplete="off"/></div>
+        <p class="payment-note">Full account numbers are not stored. Only last 4 digits are kept for reference. Payouts are processed by the platform.</p>
+        <div class="form-group"><label>About your store</label><textarea name="bio"></textarea></div>
+        <button class="btn btn-primary btn-full">Submit seller application</button>
+      </form>
+      <p style="margin-top:1rem">Already a seller? Log in below.</p>
+      <form id="sl" style="margin-top:1rem">
+        <div class="form-group"><label>Email or phone</label><input name="email" required/></div>
+        <div class="form-group"><label>Password</label><input type="password" name="password" required/></div>
+        <button class="btn btn-outline-dark btn-full" type="submit">${icon("logout")} Seller log in</button>
+      </form>
+    </div></section>`;
+  document.getElementById("sl") && (document.getElementById("sl").onsubmit = async e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try {
+      const r = await api("/api/auth/login", {method:"POST", body:JSON.stringify(fd)});
+      if (r.user.role !== "seller") { toast("Use a seller account"); return; }
+      setToken(r.token); setUser(r.user); location.reload();
+    } catch(err){ toast(err.message); }
+  });
+  document.getElementById("sf").onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const r = await api("/api/auth/register-seller", {method:"POST", body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+      setToken(r.token); setUser(r.user);
+      toast("Application submitted. Admin approval required.");
+      location.reload();
+    } catch(err){ toast(err.message); }
+  };
+}
+
+async function dashboard(me) {
+  const s = me.seller;
+  document.getElementById("root").innerHTML = `<div class="dash-wrap">
+    <aside class="dash-side">
+      <button class="linky active" data-p="overview">${icon("dash")} Dashboard</button>
+      <button class="linky" data-p="add">${icon("add")} Add Product</button>
+      <button class="linky" data-p="products">${icon("products")} Products</button>
+      <button class="linky" data-p="orders">${icon("orders")} Orders</button>
+      <button class="linky" data-p="earnings">${icon("earnings")} Earnings & Payouts</button>
+      <button class="linky" data-p="delivery">${icon("delivery")} Delivery Settings</button>
+      <button class="linky" data-p="profile">${icon("profile")} Store Profile</button>
+      <a href="/account">${icon("settings")} Settings</a>
+    </aside>
+    <div class="dash-main" id="panel"></div>
+  </div>`;
+  document.querySelectorAll(".dash-side .linky").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".dash-side .linky").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    show(b.dataset.p);
+  });
+  async function show(p) {
+    if (s.status !== "approved" && p !== "profile" && p !== "overview") {
+      document.getElementById("panel").innerHTML = `<div class="alert">Your seller application is <strong>${s.status}</strong>. You can add products after admin approval.</div>`;
+      if (p !== "overview") return;
+    }
+    if (p === "overview") {
+      const d = await api("/api/seller/dashboard");
+      const st = d.stats;
+      document.getElementById("panel").innerHTML = `<h2>Overview</h2>
+        <div class="alert">Store: ${escapeHtml(s.store_name)} · Seller ID: ${escapeHtml(s.seller_code || "Assigned after approval")} · Status: ${s.status}
+          <button class="btn btn-sm btn-outline-dark" type="button" onclick="logout()">${icon("logout")} Log out</button></div>
+        <div class="stat-grid">
+          <div class="stat-card">Gross sales<b>${money(st.gross_sales)}</b></div>
+          <div class="stat-card">Commission<b>${money(st.commission)}</b></div>
+          <div class="stat-card">Net earnings<b>${money(st.net_earnings)}</b></div>
+          <div class="stat-card">Available payout<b>${money(st.available_payout)}</b></div>
+          <div class="stat-card">Paid<b>${money(st.paid)}</b></div>
+          <div class="stat-card">Orders<b>${st.orders}</b></div>
+        </div>`;
+    }
+    if (p === "add") {
+      const cats = (await api("/api/categories")).categories;
+      const mains = cats.filter(c => !c.parent_id);
+      document.getElementById("panel").innerHTML = `<h2>Add Product</h2>
+        <form id="pf" class="auth-card" style="margin:0;max-width:640px">
+          <div class="form-group"><label>Name</label><input name="name" required/></div>
+          <div class="form-row">
+            <div class="form-group"><label>Category</label>
+              <select name="category_id" id="cid">${mains.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></div>
+            <div class="form-group"><label>Subcategory</label><select name="subcategory_id" id="sid"></select></div>
+          </div>
+          <div class="form-group"><label>Description</label><textarea name="description"></textarea></div>
+          <div class="form-row">
+            <div class="form-group"><label>Selling price</label><input name="price" type="number" step="0.01" required/></div>
+            <div class="form-group"><label>MRP</label><input name="mrp" type="number" step="0.01"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Stock</label><input name="stock" type="number" value="1"/></div>
+            <div class="form-group"><label>SKU</label><input name="sku"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Size</label><input name="size"/></div>
+            <div class="form-group"><label>Color</label><input name="color"/></div>
+          </div>
+          <div class="form-group"><label>Shipping info</label><input name="shipping"/></div>
+          <div class="form-group"><label>Image upload</label><input type="file" id="imgf" accept="image/*"/></div>
+          <input type="hidden" name="images" id="imgs"/>
+          <button class="btn btn-primary">Submit for approval</button>
+        </form>`;
+      const fillSubs = () => {
+        const pid = Number(document.getElementById("cid").value);
+        const subs = cats.filter(c => c.parent_id === pid);
+        document.getElementById("sid").innerHTML = `<option value="">—</option>` + subs.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
+      };
+      fillSubs();
+      document.getElementById("cid").onchange = fillSubs;
+      document.getElementById("imgf").onchange = async ev => {
+        const f = ev.target.files[0]; if (!f) return;
+        const fd = new FormData(); fd.append("file", f, f.name);
+        const res = await fetch("/api/upload", { method:"POST", headers: { Authorization: "Bearer "+token() }, body: fd });
+        const data = await res.json();
+        if (!res.ok) return toast(data.error||"Upload failed");
+        document.getElementById("imgs").value = JSON.stringify([data.url]);
+        toast("Image uploaded");
+      };
+      document.getElementById("pf").onsubmit = async e => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target));
+        fd.price = Number(fd.price); fd.stock = Number(fd.stock||0);
+        fd.mrp = fd.mrp ? Number(fd.mrp) : null;
+        fd.category_id = Number(fd.category_id); fd.subcategory_id = fd.subcategory_id ? Number(fd.subcategory_id) : null;
+        fd.images = fd.images ? JSON.parse(fd.images) : [];
+        try { await api("/api/seller/products", {method:"POST", body:JSON.stringify(fd)}); toast("Submitted for approval"); show("products"); }
+        catch(err){ toast(err.message); }
+      };
+    }
+    if (p === "products") {
+      const list = (await api("/api/seller/products")).products;
+      document.getElementById("panel").innerHTML = `<h2>My Products</h2>
+        <table class="table"><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+        <tbody>${list.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${money(x.price)}</td>
+          <td><input data-stock="${x.id}" value="${x.stock}" style="width:70px"/></td>
+          <td>${x.status} ${x.available===0?"· unavailable":""}</td>
+          <td>
+            <button data-av="${x.id}" data-on="${x.available===0?1:0}">${x.available===0?"Mark available":"Mark unavailable"}</button>
+            <button data-del="${x.id}">Remove</button>
+          </td></tr>`).join("")}</tbody></table>`;
+      document.querySelectorAll("[data-stock]").forEach(inp => inp.onchange = async () => {
+        await api("/api/seller/products/"+inp.dataset.stock, {method:"PUT", body:JSON.stringify({stock:Number(inp.value)})});
+        toast("Stock updated");
+      });
+      document.querySelectorAll("[data-av]").forEach(b => b.onclick = async () => {
+        await api("/api/seller/products/"+b.dataset.av, {method:"PUT", body:JSON.stringify({available: Number(b.dataset.on)})});
+        show("products");
+      });
+      document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+        if (!confirm("Remove this product from sale?")) return;
+        await api("/api/seller/products/"+b.dataset.del, {method:"DELETE"});
+        show("products");
+      });
+    }
+    if (p === "orders") {
+      const list = (await api("/api/seller/orders")).orders;
+      document.getElementById("panel").innerHTML = `<h2>Orders</h2>
+        <table class="table"><thead><tr><th>Order</th><th>Item</th><th>Qty</th><th>Seller amount</th><th>Status</th></tr></thead>
+        <tbody>${list.map(o=>`<tr><td>${o.public_id}</td><td>${escapeHtml(o.name)}</td><td>${o.qty}</td>
+          <td>${money(o.seller_amt)}</td><td>
+            <select data-st="${o.id}">
+              ${(o.vertical==="food"||o.vertical==="grocery"
+                ? ["new","accepted","preparing","ready_pickup","picked_up","out_for_delivery","delivered","cancelled"]
+                : ["placed","accepted","packed","ready_pickup","shipped","in_transit","out_for_delivery","delivered","cancelled","failed","returned"]
+              ).map(s=>`<option ${s===o.status?"selected":""}>${s}</option>`).join("")}
+            </select></td></tr>`).join("") || "<tr><td colspan=5>No orders</td></tr>"}</tbody></table>`;
+      document.querySelectorAll("[data-st]").forEach(sel => sel.onchange = async () => {
+        await api("/api/seller/orders/"+sel.dataset.st, {method:"PUT", body:JSON.stringify({status: sel.value})});
+        toast("Status updated");
+      });
+    }
+    if (p === "earnings") {
+      const d = await api("/api/seller/dashboard");
+      document.getElementById("panel").innerHTML = `<h2>Earnings</h2>
+        <div class="stat-grid">
+          <div class="stat-card">Gross<b>${money(d.stats.gross_sales)}</b></div>
+          <div class="stat-card">Commission deducted<b>${money(d.stats.commission)}</b></div>
+          <div class="stat-card">Net<b>${money(d.stats.net_earnings)}</b></div>
+          <div class="stat-card">Available<b>${money(d.stats.available_payout)}</b></div>
+        </div>
+        <h3>Payout history</h3>
+        <table class="table"><thead><tr><th>ID</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${(d.payouts||[]).map(p=>`<tr><td>${p.id}</td><td>${money(p.amount)}</td><td>${p.status}</td></tr>`).join("") || "<tr><td colspan=3>No payouts yet</td></tr>"}</tbody></table>`;
+    }
+    if (p === "delivery") {
+      document.getElementById("panel").innerHTML = `<h2>Delivery settings</h2>
+        <form id="ds" class="auth-card" style="margin:0;max-width:640px">
+          <div class="form-group"><label>Store status</label>
+            <select name="open_status">
+              <option ${s.open_status==="open"?"selected":""} value="open">Open</option>
+              <option ${s.open_status==="closed"?"selected":""} value="closed">Closed</option>
+              <option ${s.open_status==="unavailable"?"selected":""} value="unavailable">Temporarily unavailable</option>
+            </select></div>
+          <div class="form-row">
+            <div class="form-group"><label>Opens</label><input name="hours_open" value="${escapeHtml(s.hours_open||"10:00")}"/></div>
+            <div class="form-group"><label>Closes</label><input name="hours_close" value="${escapeHtml(s.hours_close||"22:00")}"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Delivery</label>
+              <select name="delivery_enabled"><option value="1">Yes</option><option value="0" ${s.delivery_enabled===0?"selected":""}>No</option></select></div>
+            <div class="form-group"><label>Pickup</label>
+              <select name="pickup_enabled"><option value="1">Yes</option><option value="0" ${s.pickup_enabled===0?"selected":""}>No</option></select></div>
+          </div>
+          <div class="form-group"><label>Shipping method</label>
+            <select name="shipping_method">
+              <option value="courier">Third-party courier</option>
+              <option value="platform">SRJ delivery partner</option>
+              <option value="seller_ship">Seller arranged</option>
+              <option value="pickup">Customer pickup</option>
+            </select></div>
+          <div class="form-group"><label>Delivery areas</label><input name="delivery_areas" value="${escapeHtml(s.delivery_areas||"")}"/></div>
+          <div class="form-row">
+            <div class="form-group"><label>Food prep time (min)</label><input name="prep_time_min" type="number" value="${s.prep_time_min||30}"/></div>
+            <div class="form-group"><label>Product dispatch time (hours)</label><input name="process_time_hours" type="number" value="${s.process_time_hours||24}"/></div>
+          </div>
+          <button class="btn btn-primary">Save</button>
+        </form>`;
+      document.getElementById("ds").onsubmit = async e => {
+        e.preventDefault();
+        const d = Object.fromEntries(new FormData(e.target));
+        d.delivery_enabled = Number(d.delivery_enabled);
+        d.pickup_enabled = Number(d.pickup_enabled);
+        d.prep_time_min = Number(d.prep_time_min);
+        d.process_time_hours = Number(d.process_time_hours);
+        await api("/api/seller/profile", {method:"PUT", body:JSON.stringify(d)});
+        toast("Saved");
+      };
+    }
+    if (p === "profile") {
+      document.getElementById("panel").innerHTML = `<h2>Store profile</h2>
+        <form id="pr" class="auth-card" style="margin:0">
+          <div class="form-group"><label>Store name</label><input name="store_name" value="${escapeHtml(s.store_name)}"/></div>
+          <div class="form-group"><label>City</label><input name="city" value="${escapeHtml(s.city||"")}"/></div>
+          <div class="form-group"><label>Bio</label><textarea name="bio">${escapeHtml(s.bio||"")}</textarea></div>
+          <button class="btn btn-primary">Save</button>
+        </form>`;
+      document.getElementById("pr").onsubmit = async e => {
+        e.preventDefault();
+        await api("/api/seller/profile", {method:"PUT", body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});
+        toast("Saved");
+      };
+    }
+  }
+  show("overview");
+}
+start();
+</script>
+</body></html>
