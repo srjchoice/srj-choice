@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#440B04"/>
+  <meta name="description" content="SRJ Choice marketplace for products, food and grocery. Instagram @srjchoice. Email thesrjchoice@gmail.com."/>
+  <link rel="icon" href="/logo.jpg"/>
+  <link rel="canonical" href="https://www.srjchoice.shop/"/>
+
+  <title>Account | SRJ Choice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<div id="app"></div>
+<script src="/app.js"></script>
+<script>
+const next = new URLSearchParams(location.search).get("next");
+document.getElementById("app").innerHTML = headerHTML("account") + `<main class="section"><div class="container" id="main"></div></main>` + footerHTML();
+updateCartCount();
+
+async function show() {
+  if (!token()) return guest();
+  try {
+    const me = await api("/api/me");
+    const orders = await api("/api/orders/mine").catch(() => ({orders:[]}));
+    setUser(me.user);
+    document.getElementById("main").innerHTML = `
+      <h1 class="section-title">My Account</h1>
+      <p>${escapeHtml(me.user.name)} · ${escapeHtml(me.user.email)} · ${escapeHtml(me.user.role)}</p>
+      <p style="margin:1rem 0">
+        ${me.user.role==="seller"?'<a class="btn btn-primary" href="/seller">Seller dashboard</a>':''}
+        ${me.user.role==="admin"?'<a class="btn btn-primary" href="/admin">Admin panel</a>':''}
+        <button class="btn btn-outline-dark" type="button" onclick="logout()">Log out</button>
+      </p>
+      <h3>Orders</h3>
+      <table class="table"><thead><tr><th>ID</th><th>Status</th><th>Total</th><th>Items</th></tr></thead>
+      <tbody>${(orders.orders||[]).map(o=>`<tr><td>${o.public_id}</td><td>${statusBadge(o.status)}</td><td>${money(o.total)}</td>
+        <td>${(o.items||[]).map(i=>escapeHtml(i.name)+' × '+i.qty+' ('+i.status+')').join('<br>')}
+        ${o.delivery?`<div>Track ${escapeHtml(o.delivery.tracking_code||'')} · ${escapeHtml(o.delivery.status||'')} · delivery ${money(o.delivery_fee||0)}</div>`:''}</td></tr>`).join("") || "<tr><td colspan=4>No orders yet</td></tr>"}</tbody></table>
+      <p style="margin-top:2rem"><button class="btn btn-outline-dark" id="del">Delete my account</button></p>`;
+    document.getElementById("del").onclick = async () => {
+      if (!confirm("Delete account and anonymize personal data?")) return;
+      await api("/api/account/delete", {method:"POST", body:"{}"});
+      logout();
+    };
+  } catch { guest(); }
+}
+
+function guest() {
+  document.getElementById("main").innerHTML = `
+    <div class="auth-card">
+      <h2>Welcome to SRJ Choice</h2>
+      <div class="shop-filters" style="margin:1rem 0">
+        <button class="btn btn-primary" id="t-login">Login</button>
+        <button class="btn btn-outline-dark" id="t-reg">Create account</button>
+      </div>
+      <form id="f-login">
+        <div class="form-group"><label>Email or phone</label><input name="email" required/></div>
+        <div class="form-group"><label>Password</label><input type="password" name="password" required/></div>
+        <button class="btn btn-primary btn-full">Login</button>
+      </form>
+      <form id="f-reg" class="hidden">
+        <div class="form-group"><label>Full name</label><input name="name" required/></div>
+        <div class="form-group"><label>Email</label><input type="email" name="email" required/></div>
+        <div class="form-group"><label>Mobile</label><input name="phone" required/></div>
+        <div class="form-group"><label>Password (8+)</label><input type="password" name="password" required minlength="8"/></div>
+        <button class="btn btn-primary btn-full">Create customer account</button>
+      </form>
+      <p style="margin-top:1rem"><a href="/seller">Become a Seller</a></p>
+    </div>`;
+  document.getElementById("t-login").onclick = () => { document.getElementById("f-login").classList.remove("hidden"); document.getElementById("f-reg").classList.add("hidden"); };
+  document.getElementById("t-reg").onclick = () => { document.getElementById("f-reg").classList.remove("hidden"); document.getElementById("f-login").classList.add("hidden"); };
+  document.getElementById("f-login").onsubmit = async e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try {
+      const r = await api("/api/auth/login", {method:"POST", body:JSON.stringify(fd)});
+      setToken(r.token); setUser(r.user);
+      location.href = next === "checkout" ? "/?page=checkout" : (r.user.role==="admin"?"/admin": r.user.role==="seller"?"/seller":"/account");
+    } catch(err){ toast(err.message); }
+  };
+  document.getElementById("f-reg").onsubmit = async e => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try {
+      const r = await api("/api/auth/register", {method:"POST", body:JSON.stringify(fd)});
+      setToken(r.token); setUser(r.user);
+      location.href = next === "checkout" ? "/?page=checkout" : "/account";
+    } catch(err){ toast(err.message); }
+  };
+}
+show();
+</script>
+</body></html>
